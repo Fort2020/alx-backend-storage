@@ -1,51 +1,34 @@
 #!/usr/bin/env python3
-"""a module with tools for request caching and tracking
-"""
-from functools import wraps
-from typing import Callable
+""" Implementing an expiring web cache and tracker """
+
 import redis
 import requests
+from typing import Callable
+from functools import wraps
 
-_redis = redis.Redis()
-_redis.flushdb()
+redis = redis.Redis()
 
 
-def count_requests(method: Callable) -> Callable:
-    """count_requests function
+def wrap_requests(fn: Callable) -> Callable:
+    """  implement a get_page function """
 
-    Args:
-        method (Callable): method
+    @wraps(fn)
+    def wrapper(url):
+        """  implement a get_page function """
+        redis.incr(f"count:{url}")
+        cached_response = redis.get(f"cached:{url}")
+        if cached_response:
+            return cached_response.decode('utf-8')
+        result = fn(url)
+        redis.setex(f"cached:{url}", 10, result)
+        return result
 
-    Returns:
-        Callable: wrapper
-    """
-    @wraps(method)
-    def wrapper(*args, **kwargs):
-        """wrapper function
-
-        Returns:
-            [type]: wrapper
-        """
-        url = args[0]
-        cached = _redis.get(f"cached:{url}")
-        if cached:
-            return cached.decode("utf-8")
-        response = method(*args, **kwargs)
-        _redis.incr(f"count:{url}")
-        _redis.setex(f"cached:{url}", 10, response)
-        return response
     return wrapper
 
 
-@count_requests
+@wrap_requests
 def get_page(url: str) -> str:
-    """get_page function
-
-    Args:
-        url (str): url
-
-    Returns:
-        str: response
+    """get page self descriptive
     """
-    response = requests.get(url, timeout=10)
+    response = requests.get(url)
     return response.text
